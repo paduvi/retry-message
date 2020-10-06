@@ -2,6 +2,7 @@ package io.dogy.util;
 
 import com.fasterxml.jackson.databind.JavaType;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.sun.media.sound.InvalidDataException;
 import net.jodah.failsafe.*;
 import org.apache.commons.io.FileUtils;
 import org.rocksdb.Options;
@@ -75,12 +76,17 @@ public abstract class AbstractMessageQueueService<T> implements IStatusMonitor {
         }
     }
 
-    public void handleMessage(Message<T> message) throws Exception {
-        message.setServiceName(this.getName());
-        assert targetClass.hasRawClass(message.getPayload().getClass());
+    public void handleMessage(Message<T> originalMessage) throws Exception {
+        originalMessage.setServiceName(this.getName());
+        assert targetClass.hasRawClass(originalMessage.getPayload().getClass());
 
-        final String key = message.getKey();
-        backupDB.put(ByteUtil.toBytes(key), ByteUtil.toBytes(message));
+        final String key = originalMessage.getKey();
+        byte[] bytes = ByteUtil.toBytes(originalMessage);
+        backupDB.put(ByteUtil.toBytes(key), bytes);
+
+        // clone message for immutable purpose
+        Message<T> message = ByteUtil.toPOJO(bytes, targetClass);
+
         notCompletedCount.incrementAndGet();
         frequencyCounter.increment();
 
